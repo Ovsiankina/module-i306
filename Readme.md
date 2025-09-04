@@ -8,6 +8,7 @@ An E-Commerce app built with Python Flask
  - Custom admin panel for order processing and managing items
  - Item Search feature
  - Boostrap + custom CSS UI
+   
 
 # Prerequisties
 
