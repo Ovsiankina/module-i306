@@ -1,5 +1,5 @@
 import os, datetime
-from flask import render_template, url_for
+from flask import current_app, render_template, url_for
 from itsdangerous import URLSafeTimedSerializer
 from flask_login import current_user
 from flask_mail import Mail, Message
@@ -11,18 +11,20 @@ load_dotenv()
 mail = Mail()
 
 def send_confirmation_email(user_email) -> None:
-	""" sends confirmation email """
-	confirm_serializer = URLSafeTimedSerializer(os.environ["SECRET_KEY"])
+	"""sends confirmation email (suppressed in dev without mail creds)"""
+	secret = current_app.config.get("SECRET_KEY", os.getenv("SECRET_KEY", "dev-secret-key"))
+	confirm_serializer = URLSafeTimedSerializer(secret)
 	confirm_url = url_for(
 						'confirm_email',
 						token=confirm_serializer.dumps(user_email,
 						salt='email-confirmation-salt'),
 						_external=True)
 	html = render_template('email_confirmation.html', confirm_url=confirm_url)
+	sender_email = current_app.config.get("MAIL_USERNAME", os.getenv("EMAIL", "noreply@example.local"))
 	msg = Message(
 		'Confirm Your Email Address',
 		recipients=[user_email],
-		sender=("Flask-O-shop Email Confirmation", os.environ["EMAIL"]),
+		sender=("Flask-O-shop Email Confirmation", sender_email),
 		html=html,
 	)
 	mail.send(msg)
