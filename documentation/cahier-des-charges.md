@@ -4,7 +4,7 @@
 
 - [x] Payement en ligne
 - [ ] Multi-platforme (desktop + mobile) -> **Didier**
-- [ ] Panier d'achat avec sauvegarde du panier entre visites (avec ou sans compte, avec ou sans cache/cookies) -> **Adrien**
+- [x] Panier d'achat avec sauvegarde du panier entre visites (avec ou sans compte, avec ou sans cache/cookies) -> **Adrien**
 - [x] interface accessible et simple
 - [ ] Deployement pas cher et facile (azure ?) -> **Timothée**
 - [ ] Backend administrateur pour gestion du stock et modification des offres, prix, etc. -> **David**
