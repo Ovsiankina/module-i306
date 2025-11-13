@@ -13,6 +13,10 @@ a:hover {
 
 footer {
 	box-shadow: 1px 0 2px 0 rgba(0, 0, 0, 0.2), 1px 0 5px 0 rgba(0, 0, 0, 0.19);
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	width: 100%;
 }
 
 .forms, .flash-error, .success {
