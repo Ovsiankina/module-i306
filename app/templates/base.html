@@ -36,17 +36,32 @@
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('register') }}">Register</a>
             </li>
+            {% if cart_items_count > 0 %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('cart') }}">
+                <div class="cart-icon-container">
+                  <i class="fa fa-shopping-cart" style="font-size:25px"></i>
+                  <span class="cart-badge">{{ cart_items_count }}</span>
+                </div>
+              </a>
+            </li>
+            {% endif %}
           {% else %}
             <li class="nav-item">
               <a class="nav-link" href="#">
                 <i class='fa fa-bell' style='font-size:24px'></i>
               </a>
             </li>
+            {% if cart_items_count > 0 %}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('cart') }}">
-                <i class="fa fa-shopping-cart" style="font-size:25px"></i>
+                <div class="cart-icon-container">
+                  <i class="fa fa-shopping-cart" style="font-size:25px"></i>
+                  <span class="cart-badge">{{ cart_items_count }}</span>
+                </div>
               </a>
             </li>
+            {% endif %}
           
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -83,5 +98,166 @@
     <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    
+    <!-- Script minimal pour gérer localStorage comme fallback des cookies -->
+    <script>
+    (function() {
+        const CART_STORAGE_KEY = 'cart';
+        const COOKIE_TEST_KEY = 'cookie_test';
+        
+        // Fonction pour vérifier si les cookies fonctionnent
+        function cookiesEnabled() {
+            try {
+                document.cookie = COOKIE_TEST_KEY + "=test; path=/";
+                return document.cookie.indexOf(COOKIE_TEST_KEY) !== -1;
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Fonction pour obtenir le panier depuis localStorage
+        function getCartFromLocalStorage() {
+            try {
+                const cart = localStorage.getItem(CART_STORAGE_KEY);
+                return cart ? JSON.parse(cart) : {};
+            } catch(e) {
+                return {};
+            }
+        }
+        
+        // Fonction pour sauvegarder le panier dans localStorage
+        function saveCartToLocalStorage(cart) {
+            try {
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Fonction pour synchroniser localStorage avec le serveur
+        function syncCartWithServer() {
+            if (cookiesEnabled()) {
+                // Si les cookies fonctionnent, on laisse le serveur gérer
+                return;
+            }
+            
+            const cart = getCartFromLocalStorage();
+            if (Object.keys(cart).length === 0) {
+                return;
+            }
+            
+            // Envoyer le panier au serveur pour synchronisation
+            fetch('/api/sync-cart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Cart-LocalStorage': JSON.stringify(cart)
+                },
+                body: JSON.stringify(cart)
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.success && data.cart) {
+                      // Mettre à jour localStorage avec le panier fusionné
+                      saveCartToLocalStorage(data.cart);
+                  }
+              }).catch(err => console.error('Erreur synchronisation panier:', err));
+        }
+        
+        // Ajouter le panier localStorage dans toutes les requêtes
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            if (!cookiesEnabled()) {
+                const cart = getCartFromLocalStorage();
+                if (Object.keys(cart).length > 0) {
+                    options = options || {};
+                    options.headers = options.headers || {};
+                    if (typeof options.headers === 'object' && !Array.isArray(options.headers)) {
+                        options.headers['X-Cart-LocalStorage'] = JSON.stringify(cart);
+                    }
+                }
+            }
+            return originalFetch(url, options);
+        };
+        
+        // Intercepter les formulaires pour ajouter le panier localStorage
+        document.addEventListener('submit', function(e) {
+            if (!cookiesEnabled()) {
+                const cart = getCartFromLocalStorage();
+                if (Object.keys(cart).length > 0) {
+                    const form = e.target;
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'cart_localstorage';
+                    input.value = JSON.stringify(cart);
+                    form.appendChild(input);
+                }
+            }
+        });
+        
+        // Synchroniser au chargement de la page
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', syncCartWithServer);
+        } else {
+            syncCartWithServer();
+        }
+        
+        // Gérer l'ajout au panier directement dans localStorage si cookies désactivés
+        if (!cookiesEnabled()) {
+            // Intercepter les soumissions de formulaire "Add to Cart"
+            document.addEventListener('submit', function(e) {
+                const form = e.target;
+                if (form.action && form.action.includes('/add/')) {
+                    const quantityInput = form.querySelector('input[name="quantity"]');
+                    if (quantityInput) {
+                        const itemId = form.action.split('/add/')[1].split('/')[0];
+                        const quantity = parseInt(quantityInput.value) || 1;
+                        
+                        // Ajouter au panier localStorage
+                        const cart = getCartFromLocalStorage();
+                        const itemIdStr = String(itemId);
+                        if (cart[itemIdStr]) {
+                            cart[itemIdStr] = parseInt(cart[itemIdStr]) + quantity;
+                        } else {
+                            cart[itemIdStr] = quantity;
+                        }
+                        saveCartToLocalStorage(cart);
+                        
+                        // Synchroniser avec le serveur après un court délai
+                        setTimeout(syncCartWithServer, 500);
+                    }
+                }
+            });
+            
+            // Intercepter les clics sur "Remove from Cart"
+            document.addEventListener('click', function(e) {
+                const target = e.target.closest('a[href*="/remove/"]');
+                if (target && target.href) {
+                    const match = target.href.match(/\/remove\/(\d+)\/(\d+)/);
+                    if (match) {
+                        const itemId = match[1];
+                        const quantity = parseInt(match[2]);
+                        
+                        // Retirer du panier localStorage
+                        const cart = getCartFromLocalStorage();
+                        const itemIdStr = String(itemId);
+                        if (cart[itemIdStr]) {
+                            const newQuantity = parseInt(cart[itemIdStr]) - quantity;
+                            if (newQuantity <= 0) {
+                                delete cart[itemIdStr];
+                            } else {
+                                cart[itemIdStr] = newQuantity;
+                            }
+                            saveCartToLocalStorage(cart);
+                            
+                            // Synchroniser avec le serveur après un court délai
+                            setTimeout(syncCartWithServer, 500);
+                        }
+                    }
+                }
+            });
+        }
+    })();
+    </script>
   </body>
 </html>

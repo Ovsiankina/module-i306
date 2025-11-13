@@ -1,14 +1,16 @@
 import datetime
+import json
 import os
 import secrets
 from functools import wraps
 
 from flask import abort, current_app, redirect, render_template, request, url_for
-from itsdangerous import URLSafeTimedSerializer
+from dotenv import load_dotenv
 from flask_login import current_user
 from flask_mail import Mail, Message
-from dotenv import load_dotenv
-from .db_models import Order, Ordered_item, db, User
+from itsdangerous import URLSafeTimedSerializer
+
+from .db_models import Cart, Order, Ordered_item, User, db
 
 
 load_dotenv()
@@ -73,9 +75,132 @@ def admin_only(func):
 				return func(*args, **kwargs)
 			abort(403)
 
-		if request.accept_mimetypes.accept_html:
-			return redirect(url_for("login"))
+	if request.accept_mimetypes.accept_html:
+		return redirect(url_for("login"))
 
-		abort(401)
+	abort(401)
 
 	return wrapper
+
+
+# Fonctions pour gérer le panier dans les cookies
+def get_cart_from_cookies():
+	"""Récupère le panier depuis les cookies"""
+	cart_cookie = request.cookies.get("cart")
+	if cart_cookie:
+		try:
+			return json.loads(cart_cookie)
+		except json.JSONDecodeError:
+			return {}
+	return {}
+
+
+def save_cart_to_cookies(response, cart_dict):
+	"""Sauvegarde le panier dans les cookies"""
+	max_age = 30 * 24 * 60 * 60  # expire après 30 jours
+	cart_json = json.dumps(cart_dict)
+	response.set_cookie("cart", cart_json, max_age=max_age, httponly=True)
+	return response
+
+
+def add_to_cart_cookie(itemid, quantity):
+	"""Ajoute un article au panier cookie"""
+	cart = get_cart_from_cookies()
+	itemid_str = str(itemid)
+
+	if itemid_str in cart:
+		cart[itemid_str] += int(quantity)
+	else:
+		cart[itemid_str] = int(quantity)
+
+	return cart
+
+
+def remove_from_cart_cookie(itemid, quantity):
+	"""Retire un article du panier cookie"""
+	cart = get_cart_from_cookies()
+	itemid_str = str(itemid)
+
+	if itemid_str in cart:
+		current_quantity = cart[itemid_str]
+		new_quantity = current_quantity - int(quantity)
+		if new_quantity <= 0:
+			del cart[itemid_str]
+		else:
+			cart[itemid_str] = new_quantity
+
+	return cart
+
+
+def sync_cart_cookie_to_db(user):
+	"""Synchronise le panier cookie vers la DB lors de la connexion"""
+	cart_cookie = get_cart_from_cookies()
+
+	if not cart_cookie:
+		return None
+
+	for itemid_str, quantity in cart_cookie.items():
+		itemid = int(itemid_str)
+		existing_cart_item = Cart.query.filter_by(itemid=itemid, uid=user.id).first()
+		if existing_cart_item:
+			existing_cart_item.quantity += int(quantity)
+		else:
+			cart_item = Cart(itemid=itemid, uid=user.id, quantity=int(quantity))
+			db.session.add(cart_item)
+
+	db.session.commit()
+	return True
+
+
+def get_cart_from_localstorage():
+	"""Récupère le panier depuis localStorage (envoyé via header ou paramètre)"""
+	cart_localstorage = request.headers.get("X-Cart-LocalStorage")
+	if not cart_localstorage:
+		cart_localstorage = request.args.get("cart_localstorage")
+
+	if cart_localstorage:
+		try:
+			return json.loads(cart_localstorage)
+		except json.JSONDecodeError:
+			return {}
+	return {}
+
+
+def get_cart_combined():
+	"""Récupère le panier depuis cookies ou localStorage (priorité cookies)"""
+	cart = get_cart_from_cookies()
+	if not cart:
+		cart = get_cart_from_localstorage()
+	return cart
+
+
+def merge_carts(cart1, cart2):
+	"""Fusionne deux paniers (additionne les quantités)"""
+	merged = cart1.copy()
+	for itemid, quantity in cart2.items():
+		if itemid in merged:
+			merged[itemid] = int(merged[itemid]) + int(quantity)
+		else:
+			merged[itemid] = int(quantity)
+	return merged
+
+
+def sync_localstorage_to_cookies(cart_localstorage):
+	"""Synchronise le panier localStorage vers les cookies"""
+	cart_cookie = get_cart_from_cookies()
+	return merge_carts(cart_cookie, cart_localstorage)
+
+
+def get_cart_items_count():
+	"""Retourne le nombre total d'articles dans le panier (DB, cookie ou localStorage)"""
+	if current_user.is_authenticated:
+		total = 0
+		for cart_item in current_user.cart:
+			total += cart_item.quantity
+		return total
+
+	cart = get_cart_combined()
+	total = 0
+	for quantity in cart.values():
+		total += int(quantity)
+	return total

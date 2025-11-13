@@ -7,7 +7,7 @@ try:
 except Exception:  # pragma: no cover
     stripe = None
 from dotenv import load_dotenv
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, make_response, redirect, render_template, request, url_for
 from flask_bootstrap import Bootstrap
 from flask_login import (
     LoginManager,
@@ -22,7 +22,20 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .admin.routes import admin
 from .db_models import Item, User, db
 from .forms import LoginForm, RegisterForm
-from .funcs import fulfill_order, mail, send_confirmation_email
+from .funcs import (
+    add_to_cart_cookie,
+    fulfill_order,
+    get_cart_combined,
+    get_cart_from_cookies,
+    get_cart_from_localstorage,
+    get_cart_items_count,
+    mail,
+    remove_from_cart_cookie,
+    save_cart_to_cookies,
+    send_confirmation_email,
+    sync_cart_cookie_to_db,
+    sync_localstorage_to_cookies,
+)
 
 load_dotenv()
 
@@ -107,8 +120,9 @@ with app.app_context():
 
 @app.context_processor
 def inject_now():
-    """sends datetime to templates as 'now'"""
-    return {"now": datetime.utcnow()}
+    """sends datetime to templates as 'now' and cart items count"""
+    cart_count = get_cart_items_count()
+    return {"now": datetime.utcnow(), "cart_items_count": cart_count}
 
 
 @login_manager.user_loader
@@ -141,6 +155,13 @@ def login():
             return redirect(url_for("login"))
         elif check_password_hash(user.password, form.password.data):
             login_user(user)
+            # Synchroniser le panier cookie vers la DB
+            if sync_cart_cookie_to_db(user):
+                # Si un panier a été synchronisé, supprimer le cookie et informer l'utilisateur
+                flash("Votre panier a été synchronisé avec votre compte!", "success")
+                response = make_response(redirect(url_for("home")))
+                response.set_cookie('cart', '', expires=0)
+                return response
             return redirect(url_for("home"))
         else:
             flash("Email and password incorrect!!", "error")
@@ -216,40 +237,78 @@ def resend():
 
 @app.route("/add/<id>", methods=["POST"])
 def add_to_cart(id):
-    if not current_user.is_authenticated:
-        flash(
-            f'You must login first!<br> <a href={url_for("login")}>Login now!</a>',
-            "error",
-        )
-        return redirect(url_for("login"))
-
     item = Item.query.get(id)
+    if not item:
+        flash("Item not found!", "error")
+        return redirect(url_for("home"))
+    
     if request.method == "POST":
         quantity = request.form["quantity"]
-        current_user.add_to_cart(id, quantity)
-        flash(
-            f"""{item.name} successfully added to the <a href=cart>cart</a>.<br> <a href={url_for("cart")}>view cart!</a>""",
-            "success",
-        )
-        return redirect(url_for("home"))
+        
+        if current_user.is_authenticated:
+            # Utilisateur connecté : utiliser la DB
+            current_user.add_to_cart(id, quantity)
+            flash(
+                f"""{item.name} successfully added to the <a href=cart>cart</a>.<br> <a href={url_for("cart")}>view cart!</a>""",
+                "success",
+            )
+            return redirect(url_for("home"))
+        else:
+            # Utilisateur non connecté : utiliser les cookies (ou localStorage si cookies désactivés)
+            cart = add_to_cart_cookie(id, quantity)
+            # Si localStorage est présent, le fusionner
+            cart_localstorage = get_cart_from_localstorage()
+            if cart_localstorage:
+                from .funcs import merge_carts
+                cart = merge_carts(cart, cart_localstorage)
+            
+            response = make_response(redirect(url_for("home")))
+            # Essayer de sauvegarder dans les cookies
+            try:
+                response = save_cart_to_cookies(response, cart)
+            except:
+                # Si les cookies ne fonctionnent pas, on laisse le client gérer avec localStorage
+                pass
+            flash(
+                f"""{item.name} successfully added to the <a href=cart>cart</a>.<br> <a href={url_for("cart")}>view cart!</a>""",
+                "success",
+            )
+            return response
 
 
 @app.route("/cart")
-@login_required
 def cart():
     price = 0
     price_ids = []
     items = []
     quantity = []
-    for cart in current_user.cart:
-        items.append(cart.item)
-        quantity.append(cart.quantity)
-        price_id_dict = {
-            "price": cart.item.price_id,
-            "quantity": cart.quantity,
-        }
-        price_ids.append(price_id_dict)
-        price += cart.item.price * cart.quantity
+    
+    if current_user.is_authenticated:
+        # Utilisateur connecté : lire depuis la DB
+        for cart in current_user.cart:
+            items.append(cart.item)
+            quantity.append(cart.quantity)
+            price_id_dict = {
+                "price": cart.item.price_id,
+                "quantity": cart.quantity,
+            }
+            price_ids.append(price_id_dict)
+            price += cart.item.price * cart.quantity
+    else:
+        # Utilisateur non connecté : lire depuis les cookies ou localStorage
+        cart_data = get_cart_combined()
+        for itemid_str, qty in cart_data.items():
+            item = Item.query.get(int(itemid_str))
+            if item:  # Vérifier que l'article existe toujours
+                items.append(item)
+                quantity.append(qty)
+                price_id_dict = {
+                    "price": item.price_id,
+                    "quantity": qty,
+                }
+                price_ids.append(price_id_dict)
+                price += item.price * qty
+    
     return render_template(
         "cart.html", items=items, price=price, price_ids=price_ids, quantity=quantity
     )
@@ -262,10 +321,28 @@ def orders():
 
 
 @app.route("/remove/<id>/<quantity>")
-@login_required
 def remove(id, quantity):
-    current_user.remove_from_cart(id, quantity)
-    return redirect(url_for("cart"))
+    if current_user.is_authenticated:
+        # Utilisateur connecté : utiliser la DB
+        current_user.remove_from_cart(id, quantity)
+        return redirect(url_for("cart"))
+    else:
+        # Utilisateur non connecté : utiliser les cookies (ou localStorage)
+        cart = remove_from_cart_cookie(id, quantity)
+        # Si localStorage est présent, le fusionner
+        cart_localstorage = get_cart_from_localstorage()
+        if cart_localstorage:
+            from .funcs import merge_carts
+            cart = merge_carts(cart, cart_localstorage)
+        
+        response = make_response(redirect(url_for("cart")))
+        # Essayer de sauvegarder dans les cookies
+        try:
+            response = save_cart_to_cookies(response, cart)
+        except:
+            # Si les cookies ne fonctionnent pas, on laisse le client gérer avec localStorage
+            pass
+        return response
 
 
 @app.route("/item/<int:id>")
@@ -295,6 +372,14 @@ def payment_failure():
 
 @app.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
+    # Nécessite une authentification pour passer à la caisse
+    if not current_user.is_authenticated:
+        flash(
+            f'Vous devez vous connecter pour passer à la caisse!<br> <a href={url_for("login")}>Connexion</a>',
+            "error",
+        )
+        return redirect(url_for("login"))
+    
     # In development without Stripe config, disable checkout gracefully
     if app.config.get("STRIPE_DISABLED"):
         flash("Payments are disabled (Stripe not configured).", "error")
@@ -349,3 +434,43 @@ def stripe_webhook():
 
     # Passed signature verification
     return {}, 200
+
+
+# API endpoints pour localStorage
+@app.route("/api/sync-cart", methods=["POST"])
+def api_sync_cart():
+    """Endpoint API pour synchroniser le panier localStorage avec les cookies"""
+    if current_user.is_authenticated:
+        return {"error": "User is authenticated, use DB"}, 400
+    
+    try:
+        cart_data = request.get_json()
+        if not cart_data:
+            cart_data = {}
+        
+        # Synchroniser localStorage vers cookies
+        merged_cart = sync_localstorage_to_cookies(cart_data)
+        
+        # Sauvegarder dans les cookies
+        response = make_response(json.dumps({"success": True, "cart": merged_cart}))
+        response.headers["Content-Type"] = "application/json"
+        response = save_cart_to_cookies(response, merged_cart)
+        
+        return response
+    except Exception as e:
+        return json.dumps({"error": str(e)}), 400
+
+
+@app.route("/api/get-cart", methods=["GET"])
+def api_get_cart():
+    """Endpoint API pour récupérer le panier (cookies ou localStorage)"""
+    if current_user.is_authenticated:
+        # Retourner le panier depuis la DB
+        cart_items = {}
+        for cart in current_user.cart:
+            cart_items[str(cart.itemid)] = cart.quantity
+        return json.dumps({"cart": cart_items})
+    else:
+        # Retourner le panier depuis cookies ou localStorage
+        cart = get_cart_combined()
+        return json.dumps({"cart": cart})
