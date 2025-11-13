@@ -1,10 +1,16 @@
-import os, datetime, json
-from flask import current_app, render_template, url_for, request, make_response
-from itsdangerous import URLSafeTimedSerializer
+import datetime
+import json
+import os
+import secrets
+from functools import wraps
+
+from flask import abort, current_app, redirect, render_template, request, url_for
+from dotenv import load_dotenv
 from flask_login import current_user
 from flask_mail import Mail, Message
-from dotenv import load_dotenv
-from .db_models import Order, Ordered_item, db, User, Cart
+from itsdangerous import URLSafeTimedSerializer
+
+from .db_models import Cart, Order, Ordered_item, User, db
 
 
 load_dotenv()
@@ -46,20 +52,41 @@ def fulfill_order(session):
 		db.session.commit()
 
 def admin_only(func):
-	""" Decorator for giving access to authorized users only """
+	"""Decorator for giving access to authorized users only (token or admin session)."""
+
+	@wraps(func)
 	def wrapper(*args, **kwargs):
-		if current_user.is_authenticated and current_user.admin == 1:
-			return func(*args, **kwargs)
-		else:
-			return "You are not Authorized to access this URL."
-	wrapper.__name__ = func.__name__
+		expected_token = (current_app.config.get("ADMIN_API_TOKEN") or "").strip()
+		auth_header = request.headers.get("Authorization", "")
+		bearer_token = ""
+		if auth_header.lower().startswith("bearer "):
+			bearer_token = auth_header.split(" ", 1)[1].strip()
+
+		if bearer_token and expected_token:
+			try:
+				if secrets.compare_digest(bearer_token, expected_token):
+					return func(*args, **kwargs)
+			except ValueError:
+				# secrets.compare_digest requires same type; fall through to reject
+				pass
+
+		if current_user.is_authenticated:
+			if current_user.admin:
+				return func(*args, **kwargs)
+			abort(403)
+
+	if request.accept_mimetypes.accept_html:
+		return redirect(url_for("login"))
+
+	abort(401)
+
 	return wrapper
 
 
 # Fonctions pour gérer le panier dans les cookies
 def get_cart_from_cookies():
 	"""Récupère le panier depuis les cookies"""
-	cart_cookie = request.cookies.get('cart')
+	cart_cookie = request.cookies.get("cart")
 	if cart_cookie:
 		try:
 			return json.loads(cart_cookie)
@@ -70,10 +97,9 @@ def get_cart_from_cookies():
 
 def save_cart_to_cookies(response, cart_dict):
 	"""Sauvegarde le panier dans les cookies"""
-	# Expire après 30 jours
-	max_age = 30 * 24 * 60 * 60
+	max_age = 30 * 24 * 60 * 60  # expire après 30 jours
 	cart_json = json.dumps(cart_dict)
-	response.set_cookie('cart', cart_json, max_age=max_age, httponly=True)
+	response.set_cookie("cart", cart_json, max_age=max_age, httponly=True)
 	return response
 
 
@@ -81,12 +107,12 @@ def add_to_cart_cookie(itemid, quantity):
 	"""Ajoute un article au panier cookie"""
 	cart = get_cart_from_cookies()
 	itemid_str = str(itemid)
-	
+
 	if itemid_str in cart:
 		cart[itemid_str] += int(quantity)
 	else:
 		cart[itemid_str] = int(quantity)
-	
+
 	return cart
 
 
@@ -94,7 +120,7 @@ def remove_from_cart_cookie(itemid, quantity):
 	"""Retire un article du panier cookie"""
 	cart = get_cart_from_cookies()
 	itemid_str = str(itemid)
-	
+
 	if itemid_str in cart:
 		current_quantity = cart[itemid_str]
 		new_quantity = current_quantity - int(quantity)
@@ -102,43 +128,36 @@ def remove_from_cart_cookie(itemid, quantity):
 			del cart[itemid_str]
 		else:
 			cart[itemid_str] = new_quantity
-	
+
 	return cart
 
 
 def sync_cart_cookie_to_db(user):
 	"""Synchronise le panier cookie vers la DB lors de la connexion"""
 	cart_cookie = get_cart_from_cookies()
-	
+
 	if not cart_cookie:
 		return None
-	
-	# Ajouter chaque article du cookie au panier DB
+
 	for itemid_str, quantity in cart_cookie.items():
 		itemid = int(itemid_str)
-		# Vérifier si l'article existe déjà dans le panier DB
 		existing_cart_item = Cart.query.filter_by(itemid=itemid, uid=user.id).first()
 		if existing_cart_item:
-			# Ajouter la quantité du cookie à celle de la DB
 			existing_cart_item.quantity += int(quantity)
 		else:
-			# Créer un nouvel élément de panier
 			cart_item = Cart(itemid=itemid, uid=user.id, quantity=int(quantity))
 			db.session.add(cart_item)
-	
+
 	db.session.commit()
-	
-	# Retourner True pour indiquer qu'une synchronisation a eu lieu
 	return True
 
 
 def get_cart_from_localstorage():
 	"""Récupère le panier depuis localStorage (envoyé via header ou paramètre)"""
-	# Le panier localStorage est envoyé depuis le client via header ou paramètre
-	cart_localstorage = request.headers.get('X-Cart-LocalStorage')
+	cart_localstorage = request.headers.get("X-Cart-LocalStorage")
 	if not cart_localstorage:
-		cart_localstorage = request.args.get('cart_localstorage')
-	
+		cart_localstorage = request.args.get("cart_localstorage")
+
 	if cart_localstorage:
 		try:
 			return json.loads(cart_localstorage)
@@ -169,26 +188,19 @@ def merge_carts(cart1, cart2):
 def sync_localstorage_to_cookies(cart_localstorage):
 	"""Synchronise le panier localStorage vers les cookies"""
 	cart_cookie = get_cart_from_cookies()
-	# Fusionner les deux paniers
-	merged_cart = merge_carts(cart_cookie, cart_localstorage)
-	return merged_cart
+	return merge_carts(cart_cookie, cart_localstorage)
 
 
 def get_cart_items_count():
 	"""Retourne le nombre total d'articles dans le panier (DB, cookie ou localStorage)"""
-	from flask_login import current_user
-	
 	if current_user.is_authenticated:
-		# Utilisateur connecté : compter depuis la DB
 		total = 0
 		for cart_item in current_user.cart:
 			total += cart_item.quantity
 		return total
-	else:
-		# Utilisateur non connecté : compter depuis cookies ou localStorage
-		cart = get_cart_combined()
-		total = 0
-		for quantity in cart.values():
-			total += int(quantity)
-		return total
 
+	cart = get_cart_combined()
+	total = 0
+	for quantity in cart.values():
+		total += int(quantity)
+	return total

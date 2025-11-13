@@ -28,17 +28,32 @@
             <th>Name</th>
 			<th>Price</th>
 			<th>Category</th>
+			<th>Stock</th>
+			<th>Low stock threshold</th>
+			<th>Status</th>
 			<th>Img Link</th>
             <th>Details</th>
             <th>Operations</th>
         </tr>
     {% for item in items %}
+		{% set inventory = item.inventory %}
         <tr>
             <td>{{ item.id }}</td>
             <td>{{ item.name }}</td>
-			<td>{{ item.price }}</td>
+			<td>{{ "%.2f"|format(item.price) }}</td>
 			<td>{{ item.category }}</td>
-			<td>{{ item.image[:15] }}...</td>
+			<td class="{% if inventory and inventory.low_stock_threshold and inventory.stock_quantity <= inventory.low_stock_threshold %}flash-error{% endif %}">
+				{{ inventory.stock_quantity if inventory else 0 }}
+			</td>
+			<td>{{ inventory.low_stock_threshold if inventory else 0 }}</td>
+			<td>
+				{% if not inventory or inventory.is_published %}
+					<span class="success">Published</span>
+				{% else %}
+					<span class="flash-error">Hidden</span>
+				{% endif %}
+			</td>
+			<td>{{ item.image[:30] }}...</td>
             <td>{{ item.details[:40] | safe }}...</td>
 			<td>
                 <a href="{{ url_for('admin.edit', type='item', id=item.id) }}">&#9998;</a>
