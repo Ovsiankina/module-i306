@@ -35,6 +35,7 @@ Werkzeug = "==2.0.1"
 WTForms = "==2.3.3"
 
 [dev-packages]
+pytest = "==8.3.3"
 
 [requires]
 python_version = "*"

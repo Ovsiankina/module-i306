@@ -25,56 +25,81 @@ from .forms import LoginForm, RegisterForm
 from .funcs import fulfill_order, mail, send_confirmation_email
 
 load_dotenv()
+
+
+def configure_app(app: Flask, config_overrides: dict | None = None) -> Flask:
+    """Configure app defaults with optional overrides (used by tests)."""
+    config_overrides = config_overrides or {}
+
+    dev_mode = config_overrides.get("DEV_MODE")
+    if dev_mode is None:
+        dev_mode = (
+            os.getenv("FLASK_ENV") == "development"
+            or os.getenv("FLASK_DEBUG") in ("1", "true", "True")
+            or os.getenv("DEBUG") in ("1", "true", "True")
+            or config_overrides.get("TESTING", False)
+        )
+
+    secret_key = config_overrides.get("SECRET_KEY") or os.getenv("SECRET_KEY")
+    if not secret_key and dev_mode:
+        secret_key = "dev-secret-key"
+    elif not secret_key:
+        raise RuntimeError("SECRET_KEY is required. Set it in environment or .env")
+
+    db_uri = config_overrides.get("SQLALCHEMY_DATABASE_URI") or os.getenv("DB_URI")
+    if not db_uri and dev_mode:
+        base_dir = os.path.dirname(__file__)
+        db_uri = "sqlite:///" + os.path.join(base_dir, "test.db")
+    elif not db_uri:
+        raise RuntimeError("DB_URI is required. Set it in environment or .env")
+
+    mail_username = config_overrides.get("MAIL_USERNAME")
+    if mail_username is None:
+        mail_username = os.getenv("EMAIL", "")
+
+    mail_password = config_overrides.get("MAIL_PASSWORD")
+    if mail_password is None:
+        mail_password = os.getenv("PASSWORD", "")
+
+    admin_api_token = config_overrides.get("ADMIN_API_TOKEN")
+    if admin_api_token is None:
+        admin_api_token = os.getenv("ADMIN_API_TOKEN", "")
+
+    app.config.update(
+        SECRET_KEY=secret_key,
+        SQLALCHEMY_DATABASE_URI=db_uri,
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        MAIL_USERNAME=mail_username or "",
+        MAIL_PASSWORD=mail_password or "",
+        MAIL_SERVER="smtp.googlemail.com",
+        MAIL_USE_TLS=True,
+        MAIL_PORT=587,
+        MAIL_SUPPRESS_SEND=bool(dev_mode and (not mail_username or not mail_password)),
+        ADMIN_API_TOKEN=admin_api_token or "",
+        DEV_MODE=bool(dev_mode),
+    )
+
+    if config_overrides:
+        app.config.update(config_overrides)
+
+    stripe_key = app.config.get("STRIPE_PRIVATE") or os.getenv("STRIPE_PRIVATE")
+    if stripe and stripe_key:
+        stripe.api_key = stripe_key
+        app.config["STRIPE_DISABLED"] = False
+    else:
+        app.config["STRIPE_DISABLED"] = True
+
+    return app
+
+
 app = Flask(__name__)
-app.register_blueprint(admin)
-
-# Detect development mode (allow fallbacks)
-dev_mode = (
-    os.getenv("FLASK_ENV") == "development"
-    or os.getenv("FLASK_DEBUG") in ("1", "true", "True")
-    or os.getenv("DEBUG") in ("1", "true", "True")
-)
-
-# Secret key: required in prod, default in dev
-secret_key = os.getenv("SECRET_KEY")
-if not secret_key and dev_mode:
-    secret_key = "dev-secret-key"
-elif not secret_key:
-    raise RuntimeError("SECRET_KEY is required. Set it in environment or .env")
-app.config["SECRET_KEY"] = secret_key
-
-# Database URI: required in prod, default to local sqlite in dev
-db_uri = os.getenv("DB_URI")
-if not db_uri and dev_mode:
-    base_dir = os.path.dirname(__file__)
-    db_uri = "sqlite:///" + os.path.join(base_dir, "test.db")
-elif not db_uri:
-    raise RuntimeError("DB_URI is required. Set it in environment or .env")
-app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Mail settings (suppress send in dev when creds missing)
-mail_username = os.getenv("EMAIL")
-mail_password = os.getenv("PASSWORD")
-app.config["MAIL_USERNAME"] = mail_username or ""
-app.config["MAIL_PASSWORD"] = mail_password or ""
-app.config["MAIL_SERVER"] = "smtp.googlemail.com"
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_PORT"] = 587
-app.config["MAIL_SUPPRESS_SEND"] = bool(dev_mode and (not mail_username or not mail_password))
-
-# Stripe configuration (optional in dev)
-stripe_key = os.getenv("STRIPE_PRIVATE")
-if stripe and stripe_key:
-    stripe.api_key = stripe_key
-else:
-    app.config["STRIPE_DISABLED"] = True
-
+configure_app(app)
 Bootstrap(app)
 db.init_app(app)
 mail.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
+app.register_blueprint(admin)
 
 with app.app_context():
     db.create_all()
@@ -94,7 +119,10 @@ def load_user(user_id):
 @app.route("/")
 def home():
     items = Item.query.all()
-    return render_template("home.html", items=items)
+    visible_items = [
+        item for item in items if not getattr(item, "inventory", None) or item.inventory.is_published
+    ]
+    return render_template("home.html", items=visible_items)
 
 
 @app.route("/login", methods=["POST", "GET"])

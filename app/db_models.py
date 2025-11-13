@@ -1,3 +1,5 @@
+import datetime
+
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 
@@ -37,6 +39,17 @@ class Item(db.Model):
 	price_id = db.Column(db.String(250), nullable=False)
 	orders = db.relationship("Ordered_item", backref="item")
 	in_cart = db.relationship("Cart", backref="item")
+	inventory = db.relationship(
+		"Inventory",
+		back_populates="item",
+		uselist=False,
+		cascade="all, delete-orphan",
+	)
+	logs = db.relationship(
+		"InventoryLog",
+		back_populates="item",
+		cascade="all, delete-orphan",
+	)
 
 class Cart(db.Model):
 	__tablename__ = "cart"
@@ -59,3 +72,31 @@ class Ordered_item(db.Model):
 	oid = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
 	itemid = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
 	quantity = db.Column(db.Integer, db.ForeignKey('cart.quantity'), nullable=False)
+
+
+class Inventory(db.Model):
+	__tablename__ = "inventory"
+	id = db.Column(db.Integer, primary_key=True)
+	item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=False, unique=True)
+	stock_quantity = db.Column(db.Integer, nullable=False, default=0)
+	low_stock_threshold = db.Column(db.Integer, nullable=False, default=0)
+	is_published = db.Column(db.Boolean, nullable=False, default=True)
+	updated_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+	item = db.relationship("Item", back_populates="inventory")
+
+
+class InventoryLog(db.Model):
+	__tablename__ = "inventory_logs"
+	id = db.Column(db.Integer, primary_key=True)
+	item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=False)
+	user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+	change_type = db.Column(db.String(50), nullable=False)
+	field_name = db.Column(db.String(50), nullable=False)
+	old_value = db.Column(db.String(250), nullable=True)
+	new_value = db.Column(db.String(250), nullable=True)
+	note = db.Column(db.String(250), nullable=True)
+	created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+	item = db.relationship("Item", back_populates="logs")
+	user = db.relationship("User")

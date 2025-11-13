@@ -1,5 +1,9 @@
-import os, datetime
-from flask import current_app, render_template, url_for
+import datetime
+import os
+import secrets
+from functools import wraps
+
+from flask import abort, current_app, redirect, render_template, request, url_for
 from itsdangerous import URLSafeTimedSerializer
 from flask_login import current_user
 from flask_mail import Mail, Message
@@ -46,12 +50,32 @@ def fulfill_order(session):
 		db.session.commit()
 
 def admin_only(func):
-	""" Decorator for giving access to authorized users only """
+	"""Decorator for giving access to authorized users only (token or admin session)."""
+
+	@wraps(func)
 	def wrapper(*args, **kwargs):
-		if current_user.is_authenticated and current_user.admin == 1:
-			return func(*args, **kwargs)
-		else:
-			return "You are not Authorized to access this URL."
-	wrapper.__name__ = func.__name__
+		expected_token = (current_app.config.get("ADMIN_API_TOKEN") or "").strip()
+		auth_header = request.headers.get("Authorization", "")
+		bearer_token = ""
+		if auth_header.lower().startswith("bearer "):
+			bearer_token = auth_header.split(" ", 1)[1].strip()
+
+		if bearer_token and expected_token:
+			try:
+				if secrets.compare_digest(bearer_token, expected_token):
+					return func(*args, **kwargs)
+			except ValueError:
+				# secrets.compare_digest requires same type; fall through to reject
+				pass
+
+		if current_user.is_authenticated:
+			if current_user.admin:
+				return func(*args, **kwargs)
+			abort(403)
+
+		if request.accept_mimetypes.accept_html:
+			return redirect(url_for("login"))
+
+		abort(401)
+
 	return wrapper
-		

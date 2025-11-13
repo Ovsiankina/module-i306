@@ -16,6 +16,15 @@
 	{% endfor %}
 	{% endwith %}
 
+	{% if low_stock_items %}
+		<div class="flash-error">
+			<strong>Low stock alert:</strong>
+			{% for low_item in low_stock_items %}
+				<br>{{ low_item.name }} ({{ low_item.inventory.stock_quantity }} / threshold {{ low_item.inventory.low_stock_threshold }})
+			{% endfor %}
+		</div>
+	{% endif %}
+
     {% if not orders %}
 		<div class="flash-error">No orders have been placed yet.</div>
 	{% else %}
