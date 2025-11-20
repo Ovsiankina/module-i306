@@ -75,10 +75,10 @@ def admin_only(func):
 				return func(*args, **kwargs)
 			abort(403)
 
-	if request.accept_mimetypes.accept_html:
-		return redirect(url_for("login"))
+		if request.accept_mimetypes.accept_html:
+			return redirect(url_for("login"))
 
-	abort(401)
+		abort(401)
 
 	return wrapper
 
