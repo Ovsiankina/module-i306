@@ -20,11 +20,11 @@ from itsdangerous import URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .admin.routes import admin
-from .db_models import Item, User, db
+from .db_models import Inventory, Item, User, db
 from .forms import LoginForm, RegisterForm
 from .funcs import (
-    add_to_cart_cookie,
-    fulfill_order,
+	add_to_cart_cookie,
+	fulfill_order,
     get_cart_combined,
     get_cart_from_cookies,
     get_cart_from_localstorage,
@@ -32,10 +32,11 @@ from .funcs import (
     mail,
     remove_from_cart_cookie,
     save_cart_to_cookies,
-    send_confirmation_email,
-    sync_cart_cookie_to_db,
-    sync_localstorage_to_cookies,
+	send_confirmation_email,
+	sync_cart_cookie_to_db,
+	sync_localstorage_to_cookies,
 )
+from .seed_data import DEFAULT_ITEMS
 
 load_dotenv()
 
@@ -114,8 +115,66 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 app.register_blueprint(admin)
 
+
+def _debug_seeding_enabled() -> bool:
+	debug_env = os.getenv("FLASK_DEBUG", "").lower()
+	if debug_env in {"1", "true", "yes", "on"}:
+		return True
+	return bool(app.config.get("DEV_MODE"))
+
+
+def _seed_default_inventory():
+	for item_data in DEFAULT_ITEMS:
+		inventory_data = item_data.get("inventory", {})
+		item = Item(
+			name=item_data["name"],
+			price=item_data["price"],
+			category=item_data["category"],
+			image=item_data["image"],
+			details=item_data["details"],
+			price_id=item_data["price_id"],
+		)
+		db.session.add(item)
+		db.session.flush()
+
+		db.session.add(
+			Inventory(
+				item=item,
+				stock_quantity=inventory_data.get("stock_quantity", 0),
+				low_stock_threshold=inventory_data.get("low_stock_threshold", 0),
+				is_published=inventory_data.get("is_published", True),
+			)
+		)
+
+
+def _auto_migrate_dev_database():
+	if not _debug_seeding_enabled():
+		return
+
+	added = False
+	# Ensure every legacy item created before inventory shipped receives an inventory row.
+	for item in Item.query.filter(~Item.inventory.has()).all():
+		db.session.add(
+			Inventory(
+				item=item,
+				stock_quantity=0,
+				low_stock_threshold=0,
+				is_published=True,
+			)
+		)
+		added = True
+
+	if Item.query.count() == 0:
+		_seed_default_inventory()
+		added = True
+
+	if added:
+		db.session.commit()
+
+
 with app.app_context():
-    db.create_all()
+	db.create_all()
+	_auto_migrate_dev_database()
 
 
 @app.context_processor

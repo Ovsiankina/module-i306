@@ -10,6 +10,9 @@ python -m flask run
 
 # Run without stripe in DEBUG mode
 FLASK_DEBUG=1 python -m flask run
+
+# When running with FLASK_DEBUG=1 the app seeds an empty dev DB automatically,
+# so you can get demo items without having to import data manually.
 ```
 
 **Features:**
