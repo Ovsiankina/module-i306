@@ -410,6 +410,18 @@ def item(id):
     return render_template("item.html", item=item)
 
 
+@app.route("/cgu")
+def cgu():
+    """Page des conditions générales d'utilisation"""
+    return render_template("cgu.html")
+
+
+@app.route("/spydeweb")
+def spydeweb():
+    """Page de présentation de Spy de web"""
+    return render_template("spydeweb.html")
+
+
 @app.route("/search")
 def search():
     query = request.args["query"]

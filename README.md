@@ -1,6 +1,6 @@
-# Flask-O-shop
+# Fnuc Marty SA
 
-An E-Commerce app built with Python Flask
+Plateforme de commerce électronique développée avec Python Flask
 
 ## usage
 
