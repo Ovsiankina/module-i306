@@ -1,23 +1,168 @@
 {% extends "admin/base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
 
 {% block title %}
-	Administration - Ajouter un article - Fnuc Marty SA
+	{% if form.name.data %}
+		Administration - Modifier un article - Fnuc Marty SA
+	{% else %}
+		Administration - Ajouter un article - Fnuc Marty SA
+	{% endif %}
 {% endblock %}
-<script src="https://js.stripe.com/v3/"></script>
+
 {% block content %}
-	{% with msgs =  get_flashed_messages(with_categories=True) %}
-	{% for c, msg in msgs %}
-		{% if c == 'error' %}
-			<div class="flash-error">
-		{% else %}
-			<div class="success">
-		{% endif %}
-			{{ msg }}</div><br>
-	{% endfor %}
+	<script src="https://js.stripe.com/v3/"></script>
+	
+	<div class="d-flex justify-content-between align-items-center mb-4">
+		<h1>{% if form.name.data %}Modifier un produit{% else %}Ajouter un nouveau produit{% endif %}</h1>
+		<a href="{{ url_for('admin.items') }}" class="btn btn-secondary">Retour à la liste</a>
+	</div>
+
+	{% with msgs = get_flashed_messages(with_categories=True) %}
+		{% for c, msg in msgs %}
+			<div class="alert alert-{% if c == 'error' %}danger{% else %}success{% endif %} alert-dismissible fade show" role="alert">
+				{{ msg }}
+				<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+					<span aria-hidden="true">&times;</span>
+				</button>
+			</div>
+		{% endfor %}
 	{% endwith %}
 
-    <div class="forms">
-		{{ wtf.quick_form(form) }}
+	<div class="card">
+		<div class="card-body">
+			<form method="POST" enctype="multipart/form-data">
+				{{ form.hidden_tag() }}
+				
+				<div class="form-group">
+					{{ form.name.label(class="form-label") }}
+					{{ form.name(class="form-control") }}
+					{% if form.name.errors %}
+						<div class="text-danger">
+							{% for error in form.name.errors %}
+								<small>{{ error }}</small>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</div>
+
+				<div class="row">
+					<div class="col-md-6">
+						<div class="form-group">
+							{{ form.price.label(class="form-label") }}
+							<div class="input-group">
+								<div class="input-group-prepend">
+									<span class="input-group-text">$</span>
+								</div>
+								{{ form.price(class="form-control", step="0.01") }}
+							</div>
+							{% if form.price.errors %}
+								<div class="text-danger">
+									{% for error in form.price.errors %}
+										<small>{{ error }}</small>
+									{% endfor %}
+								</div>
+							{% endif %}
+						</div>
+					</div>
+					<div class="col-md-6">
+						<div class="form-group">
+							{{ form.category.label(class="form-label") }}
+							{{ form.category(class="form-control") }}
+							{% if form.category.errors %}
+								<div class="text-danger">
+									{% for error in form.category.errors %}
+										<small>{{ error }}</small>
+									{% endfor %}
+								</div>
+							{% endif %}
+						</div>
+					</div>
+				</div>
+
+				<div class="form-group">
+					{{ form.details.label(class="form-label") }}
+					{{ form.details(class="form-control", rows="4") }}
+					<small class="form-text text-muted">Vous pouvez utiliser du HTML pour formater le texte.</small>
+					{% if form.details.errors %}
+						<div class="text-danger">
+							{% for error in form.details.errors %}
+								<small>{{ error }}</small>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</div>
+
+				<div class="form-group">
+					{{ form.price_id.label(class="form-label") }}
+					{{ form.price_id(class="form-control") }}
+					<small class="form-text text-muted">ID du prix Stripe (ex: price_1Jk8KjBZlBPWG6ECQXNqcKhR)</small>
+					{% if form.price_id.errors %}
+						<div class="text-danger">
+							{% for error in form.price_id.errors %}
+								<small>{{ error }}</small>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</div>
+
+				<div class="form-group">
+					{{ form.image.label(class="form-label") }}
+					{{ form.image(class="form-control-file") }}
+					<small class="form-text text-muted">Laissez vide pour conserver l'image actuelle (en mode édition) ou utiliser l'image par défaut.</small>
+					{% if form.image.errors %}
+						<div class="text-danger">
+							{% for error in form.image.errors %}
+								<small>{{ error }}</small>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</div>
+
+				<div class="row">
+					<div class="col-md-4">
+						<div class="form-group">
+							{{ form.stock_quantity.label(class="form-label") }}
+							{{ form.stock_quantity(class="form-control", min="0") }}
+							{% if form.stock_quantity.errors %}
+								<div class="text-danger">
+									{% for error in form.stock_quantity.errors %}
+										<small>{{ error }}</small>
+									{% endfor %}
+								</div>
+							{% endif %}
+						</div>
+					</div>
+					<div class="col-md-4">
+						<div class="form-group">
+							{{ form.low_stock_threshold.label(class="form-label") }}
+							{{ form.low_stock_threshold(class="form-control", min="0") }}
+							<small class="form-text text-muted">Alerte lorsque le stock atteint cette valeur.</small>
+							{% if form.low_stock_threshold.errors %}
+								<div class="text-danger">
+									{% for error in form.low_stock_threshold.errors %}
+										<small>{{ error }}</small>
+									{% endfor %}
+								</div>
+							{% endif %}
+						</div>
+					</div>
+					<div class="col-md-4">
+						<div class="form-group">
+							<div class="form-check mt-4">
+								{{ form.is_published(class="form-check-input") }}
+								{{ form.is_published.label(class="form-check-label") }}
+							</div>
+							<small class="form-text text-muted">Les produits non publiés ne sont pas visibles sur le site.</small>
+						</div>
+					</div>
+				</div>
+
+				<div class="form-group mt-4">
+					{{ form.submit(class="btn btn-primary btn-lg") }}
+					<a href="{{ url_for('admin.items') }}" class="btn btn-secondary btn-lg">Annuler</a>
+				</div>
+			</form>
+		</div>
 	</div>
     
 {% endblock %}

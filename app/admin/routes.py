@@ -17,7 +17,7 @@ from flask_login import current_user
 from werkzeug.utils import redirect, secure_filename
 
 from ..admin.forms import AddItemForm, OrderEditForm
-from ..db_models import Inventory, InventoryLog, Item, Order, db
+from ..db_models import Inventory, InventoryLog, Item, Order, Ordered_item, User, db
 from ..funcs import admin_only
 
 
@@ -126,11 +126,94 @@ def _item_to_dict(item: Item) -> dict[str, Any]:
 @admin.route("/")
 @admin_only
 def dashboard():
-	orders = Order.query.order_by(Order.date.desc()).all()
+	from datetime import datetime, timedelta
+	from sqlalchemy import func
+	
+	# Get all orders
+	all_orders = Order.query.all()
+	orders_query = Order.query.order_by(Order.date.desc()).limit(10).all()
+	
+	# Calculate total for each order
+	orders = []
+	for order in orders_query:
+		order_total = sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		orders.append({
+			"order": order,
+			"total": order_total
+		})
+	
+	# Calculate statistics
+	total_revenue = sum(
+		sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		for order in all_orders if order.status.lower() != "cancelled"
+	)
+	total_orders = len(all_orders)
+	total_customers = User.query.count()
+	total_items = Item.query.count()
+	
+	# Orders by status
+	orders_by_status = {}
+	for order in all_orders:
+		status = order.status.lower()
+		orders_by_status[status] = orders_by_status.get(status, 0) + 1
+	
+	# Recent orders (last 7 days)
+	seven_days_ago = datetime.utcnow() - timedelta(days=7)
+	recent_orders_count = Order.query.filter(Order.date >= seven_days_ago).count()
+	
+	# Recent revenue (last 7 days)
+	recent_orders = Order.query.filter(Order.date >= seven_days_ago).all()
+	recent_revenue = sum(
+		sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		for order in recent_orders if order.status.lower() != "cancelled"
+	)
+	
+	# Low stock items
 	low_stock_items = [
-		item for item in Item.query.all() if item.inventory and item.inventory.low_stock_threshold > 0 and item.inventory.stock_quantity <= item.inventory.low_stock_threshold
+		item for item in Item.query.all() 
+		if item.inventory and item.inventory.low_stock_threshold > 0 
+		and item.inventory.stock_quantity <= item.inventory.low_stock_threshold
 	]
-	return render_template("admin/home.html", orders=orders, low_stock_items=low_stock_items)
+	
+	# Top selling items
+	top_items_query = db.session.query(
+		Ordered_item.itemid,
+		func.sum(Ordered_item.quantity).label('total_quantity')
+	).group_by(Ordered_item.itemid).order_by(func.sum(Ordered_item.quantity).desc()).limit(5).all()
+	
+	top_items = []
+	for item_id, quantity in top_items_query:
+		item = Item.query.get(item_id)
+		if item:
+			top_items.append({"item": item, "quantity": quantity})
+	
+	# Orders per day (last 7 days)
+	orders_per_day = []
+	for i in range(6, -1, -1):
+		day = datetime.utcnow() - timedelta(days=i)
+		day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+		day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+		count = Order.query.filter(Order.date >= day_start, Order.date <= day_end).count()
+		orders_per_day.append({
+			"date": day.strftime("%Y-%m-%d"),
+			"day": day.strftime("%a"),
+			"count": count
+		})
+	
+	return render_template(
+		"admin/home.html",
+		orders=orders,
+		low_stock_items=low_stock_items,
+		total_revenue=total_revenue,
+		total_orders=total_orders,
+		total_customers=total_customers,
+		total_items=total_items,
+		orders_by_status=orders_by_status,
+		recent_orders_count=recent_orders_count,
+		recent_revenue=recent_revenue,
+		top_items=top_items,
+		orders_per_day=orders_per_day,
+	)
 
 
 @admin.route("/items")

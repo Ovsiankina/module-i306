@@ -1,58 +1,286 @@
 {% extends "admin/base.html" %}
 
 {% block title %}
-	Tableau de bord - Administration - Fnuc Marty SA
+	Dashboard - Administration - Fnuc Marty SA
 {% endblock %}
-<script src="https://js.stripe.com/v3/"></script>
+
 {% block content %}
 	{% with msgs =  get_flashed_messages(with_categories=True) %}
 	{% for c, msg in msgs %}
 		{% if c == 'error' %}
-			<div class="flash-error">
+			<div class="alert alert-danger alert-dismissible fade show" role="alert">
 		{% else %}
-			<div class="success">
+			<div class="alert alert-success alert-dismissible fade show" role="alert">
 		{% endif %}
-			{{ msg }}</div><br>
+			{{ msg }}
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+				<span aria-hidden="true">&times;</span>
+			</button>
+		</div>
 	{% endfor %}
 	{% endwith %}
 
+	<h1 class="mb-4">Dashboard</h1>
+
+	<!-- Statistics Cards -->
+	<div class="row mb-4">
+		<div class="col-md-3 mb-3">
+			<div class="card bg-primary text-white">
+				<div class="card-body">
+					<div class="d-flex justify-content-between align-items-center">
+						<div>
+							<h6 class="card-subtitle mb-2">Total Revenue</h6>
+							<h3 class="mb-0">${{ "%.2f"|format(total_revenue) }}</h3>
+						</div>
+						<div class="display-4">💰</div>
+					</div>
+					{% if recent_revenue > 0 %}
+					<small class="text-white-50">Last 7 days: ${{ "%.2f"|format(recent_revenue) }}</small>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3 mb-3">
+			<div class="card bg-success text-white">
+				<div class="card-body">
+					<div class="d-flex justify-content-between align-items-center">
+						<div>
+							<h6 class="card-subtitle mb-2">Total Orders</h6>
+							<h3 class="mb-0">{{ total_orders }}</h3>
+						</div>
+						<div class="display-4">📦</div>
+					</div>
+					{% if recent_orders_count > 0 %}
+					<small class="text-white-50">Last 7 days: {{ recent_orders_count }}</small>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3 mb-3">
+			<div class="card bg-info text-white">
+				<div class="card-body">
+					<div class="d-flex justify-content-between align-items-center">
+						<div>
+							<h6 class="card-subtitle mb-2">Total Customers</h6>
+							<h3 class="mb-0">{{ total_customers }}</h3>
+						</div>
+						<div class="display-4">👥</div>
+					</div>
+					<small class="text-white-50">Registered users</small>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3 mb-3">
+			<div class="card bg-warning text-white">
+				<div class="card-body">
+					<div class="d-flex justify-content-between align-items-center">
+						<div>
+							<h6 class="card-subtitle mb-2">Total Products</h6>
+							<h3 class="mb-0">{{ total_items }}</h3>
+						</div>
+						<div class="display-4">🛍️</div>
+					</div>
+					{% if low_stock_items|length > 0 %}
+					<small class="text-white-50">{{ low_stock_items|length }} low stock</small>
+					{% else %}
+					<small class="text-white-50">All items in stock</small>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Alerts -->
 	{% if low_stock_items %}
-		<div class="flash-error">
-			<strong>Low stock alert:</strong>
-			{% for low_item in low_stock_items %}
-				<br>{{ low_item.name }} ({{ low_item.inventory.stock_quantity }} / threshold {{ low_item.inventory.low_stock_threshold }})
-			{% endfor %}
+		<div class="alert alert-warning alert-dismissible fade show" role="alert">
+			<strong>⚠️ Low Stock Alert:</strong>
+			<ul class="mb-0 mt-2">
+				{% for low_item in low_stock_items %}
+				<li>{{ low_item.name }} - Stock: {{ low_item.inventory.stock_quantity }} (Threshold: {{ low_item.inventory.low_stock_threshold }})</li>
+				{% endfor %}
+			</ul>
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+				<span aria-hidden="true">&times;</span>
+			</button>
 		</div>
 	{% endif %}
 
-    {% if not orders %}
-		<div class="flash-error">No orders have been placed yet.</div>
-	{% else %}
-    
-    <table class="table table-striped">
-        <tr>
-            <th>Order id</th>
-            <th>Order date</th>
-			<th>Ordered items</th>
-			<th>Order status</th>
-			<th>Operations</th>
-        </tr>
-    {% for order in orders %}
-        <tr>
-            <td>{{ order.id }}</td>
-            <td>{{ order.date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-			<td>
-				{% for i in order.items %}
-				{{ i.item.name }} x <span class="success">{{ i.quantity }}</span><br>
-				{% endfor %}
-			</td>
-			<td>{{ order.status }}</td>
-			<td>
-				<a href="{{ url_for('admin.edit', type='order', id=order.id) }}">&#9998;</a>
-			</td>
-        </tr>
-    {% endfor %}
-    </table>
+	<div class="row">
+		<!-- Orders Chart -->
+		<div class="col-md-6 mb-4">
+			<div class="card">
+				<div class="card-header">
+					<h5 class="mb-0">Orders (Last 7 Days)</h5>
+				</div>
+				<div class="card-body">
+					<canvas id="ordersChart" height="200"></canvas>
+				</div>
+			</div>
+		</div>
 
-	{% endif %}
+		<!-- Orders by Status -->
+		<div class="col-md-6 mb-4">
+			<div class="card">
+				<div class="card-header">
+					<h5 class="mb-0">Orders by Status</h5>
+				</div>
+				<div class="card-body">
+					<canvas id="statusChart" height="200"></canvas>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row">
+		<!-- Recent Orders -->
+		<div class="col-md-8 mb-4">
+			<div class="card">
+				<div class="card-header d-flex justify-content-between align-items-center">
+					<h5 class="mb-0">Recent Orders</h5>
+					<a href="{{ url_for('admin.items') }}" class="btn btn-sm btn-primary">View All Items</a>
+				</div>
+				<div class="card-body">
+					{% if not orders %}
+						<div class="alert alert-info mb-0">
+							No orders have been placed yet.
+						</div>
+					{% else %}
+						<div class="table-responsive">
+							<table class="table table-hover">
+								<thead>
+									<tr>
+										<th>Order ID</th>
+										<th>Date</th>
+										<th>Items</th>
+										<th>Status</th>
+										<th>Total</th>
+										<th>Actions</th>
+									</tr>
+								</thead>
+								<tbody>
+									{% for order_data in orders %}
+									{% set order = order_data.order %}
+									<tr>
+										<td>#{{ order.id }}</td>
+										<td>{{ order.date.strftime('%Y-%m-%d %H:%M') }}</td>
+										<td>
+											{% for i in order.items %}
+											<span class="badge badge-secondary">{{ i.item.name }} x{{ i.quantity }}</span>
+											{% endfor %}
+										</td>
+										<td>
+											<span class="badge badge-{% if order.status.lower() == 'completed' %}success{% elif order.status.lower() == 'pending' %}warning{% elif order.status.lower() == 'cancelled' %}danger{% else %}info{% endif %}">
+												{{ order.status }}
+											</span>
+										</td>
+										<td>
+											${{ "%.2f"|format(order_data.total) }}
+										</td>
+										<td>
+											<a href="{{ url_for('admin.edit', type='order', item_id=order.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+										</td>
+									</tr>
+									{% endfor %}
+								</tbody>
+							</table>
+						</div>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+
+		<!-- Top Selling Items -->
+		<div class="col-md-4 mb-4">
+			<div class="card">
+				<div class="card-header">
+					<h5 class="mb-0">Top Selling Items</h5>
+				</div>
+				<div class="card-body">
+					{% if top_items %}
+						<ul class="list-group list-group-flush">
+							{% for top_item in top_items %}
+							<li class="list-group-item d-flex justify-content-between align-items-center">
+								<div>
+									<strong>{{ top_item.item.name }}</strong><br>
+									<small class="text-muted">${{ "%.2f"|format(top_item.item.price) }}</small>
+								</div>
+								<span class="badge badge-primary badge-pill">{{ top_item.quantity }} sold</span>
+							</li>
+							{% endfor %}
+						</ul>
+					{% else %}
+						<p class="text-muted mb-0">No sales data available yet.</p>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Chart.js -->
+	<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+	<script>
+		// Orders Chart Data
+		const ordersData = {
+			labels: [{% for day in orders_per_day %}'{{ day.day }}'{% if not loop.last %},{% endif %}{% endfor %}],
+			values: [{% for day in orders_per_day %}{{ day.count }}{% if not loop.last %},{% endif %}{% endfor %}]
+		};
+
+		// Status Chart Data
+		const statusData = {
+			labels: [{% for status, count in orders_by_status.items() %}'{{ status|title }}'{% if not loop.last %},{% endif %}{% endfor %}],
+			values: [{% for status, count in orders_by_status.items() %}{{ count }}{% if not loop.last %},{% endif %}{% endfor %}]
+		};
+
+		// Orders Chart (Last 7 Days)
+		const ordersCtx = document.getElementById('ordersChart').getContext('2d');
+		const ordersChart = new Chart(ordersCtx, {
+			type: 'line',
+			data: {
+				labels: ordersData.labels,
+				datasets: [{
+					label: 'Orders',
+					data: ordersData.values,
+					borderColor: 'rgb(75, 192, 192)',
+					backgroundColor: 'rgba(75, 192, 192, 0.2)',
+					tension: 0.1,
+					fill: true
+				}]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				scales: {
+					y: {
+						beginAtZero: true,
+						ticks: {
+							stepSize: 1
+						}
+					}
+				}
+			}
+		});
+
+		// Orders by Status Chart
+		const statusCtx = document.getElementById('statusChart').getContext('2d');
+		const statusChart = new Chart(statusCtx, {
+			type: 'doughnut',
+			data: {
+				labels: statusData.labels,
+				datasets: [{
+					data: statusData.values,
+					backgroundColor: [
+						'rgba(54, 162, 235, 0.8)',
+						'rgba(255, 206, 86, 0.8)',
+						'rgba(75, 192, 192, 0.8)',
+						'rgba(255, 99, 132, 0.8)',
+						'rgba(153, 102, 255, 0.8)'
+					]
+				}]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false
+			}
+		});
+	</script>
 {% endblock %}

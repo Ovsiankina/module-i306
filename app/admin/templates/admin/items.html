@@ -3,65 +3,102 @@
 {% block title %}
 	Administration - Articles - Fnuc Marty SA
 {% endblock %}
-<script src="https://js.stripe.com/v3/"></script>
+
 {% block content %}
-	{% with msgs =  get_flashed_messages(with_categories=True) %}
-	{% for c, msg in msgs %}
-		{% if c == 'error' %}
-			<div class="flash-error">
-		{% else %}
-			<div class="success">
-		{% endif %}
-			{{ msg }}</div><br>
-	{% endfor %}
+	<script src="https://js.stripe.com/v3/"></script>
+	
+	<div class="d-flex justify-content-between align-items-center mb-4">
+		<h1>Gestion des Produits</h1>
+		<a href="{{ url_for('admin.add') }}" class="btn btn-success">
+			<span>&#43;</span> Ajouter un produit
+		</a>
+	</div>
+
+	{% with msgs = get_flashed_messages(with_categories=True) %}
+		{% for c, msg in msgs %}
+			<div class="alert alert-{% if c == 'error' %}danger{% else %}success{% endif %} alert-dismissible fade show" role="alert">
+				{{ msg }}
+				<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+					<span aria-hidden="true">&times;</span>
+				</button>
+			</div>
+		{% endfor %}
 	{% endwith %}
 
-    {% if not items %}
-		<div class="flash-error">No items have been registered yet.</div>
+	{% if not items %}
+		<div class="card">
+			<div class="card-body text-center py-5">
+				<h3 class="text-muted">Aucun produit enregistré</h3>
+				<p class="text-muted mb-4">Commencez par ajouter votre premier produit.</p>
+				<a href="{{ url_for('admin.add') }}" class="btn btn-primary btn-lg">
+					<span>&#43;</span> Ajouter un produit
+				</a>
+			</div>
+		</div>
 	{% else %}
-    <div class="add-new btn-success btn">
-        <a href="{{ url_for('admin.add') }}" class="text-light">Add new item</a>
-    </div>
-    <table class="table table-striped">
-        <tr>
-            <th>Item id</th>
-            <th>Name</th>
-			<th>Price</th>
-			<th>Category</th>
-			<th>Stock</th>
-			<th>Low stock threshold</th>
-			<th>Status</th>
-			<th>Img Link</th>
-            <th>Details</th>
-            <th>Operations</th>
-        </tr>
-    {% for item in items %}
-		{% set inventory = item.inventory %}
-        <tr>
-            <td>{{ item.id }}</td>
-            <td>{{ item.name }}</td>
-			<td>{{ "%.2f"|format(item.price) }}</td>
-			<td>{{ item.category }}</td>
-			<td class="{% if inventory and inventory.low_stock_threshold and inventory.stock_quantity <= inventory.low_stock_threshold %}flash-error{% endif %}">
-				{{ inventory.stock_quantity if inventory else 0 }}
-			</td>
-			<td>{{ inventory.low_stock_threshold if inventory else 0 }}</td>
-			<td>
-				{% if not inventory or inventory.is_published %}
-					<span class="success">Published</span>
-				{% else %}
-					<span class="flash-error">Hidden</span>
-				{% endif %}
-			</td>
-			<td>{{ item.image[:30] }}...</td>
-            <td>{{ item.details[:40] | safe }}...</td>
-			<td>
-                <a href="{{ url_for('admin.edit', type='item', id=item.id) }}">&#9998;</a>
-				<a href="{{ url_for('admin.delete', id=item.id) }}">&#10060;</a>
-			</td>
-        </tr>
-    {% endfor %}
-    </table>
-
+		<div class="card">
+			<div class="card-body">
+				<div class="table-responsive">
+					<table class="table table-hover">
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Nom</th>
+								<th>Prix</th>
+								<th>Catégorie</th>
+								<th>Stock</th>
+								<th>Seuil d'alerte</th>
+								<th>Statut</th>
+								<th>Image</th>
+								<th>Détails</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for item in items %}
+								{% set inventory = item.inventory %}
+								<tr>
+									<td>#{{ item.id }}</td>
+									<td><strong>{{ item.name }}</strong></td>
+									<td>${{ "%.2f"|format(item.price) }}</td>
+									<td><span class="badge badge-info">{{ item.category }}</span></td>
+									<td>
+										<span class="{% if inventory and inventory.low_stock_threshold and inventory.stock_quantity <= inventory.low_stock_threshold %}text-danger font-weight-bold{% endif %}">
+											{{ inventory.stock_quantity if inventory else 0 }}
+										</span>
+									</td>
+									<td>{{ inventory.low_stock_threshold if inventory else 0 }}</td>
+									<td>
+										{% if not inventory or inventory.is_published %}
+											<span class="badge badge-success">Publié</span>
+										{% else %}
+											<span class="badge badge-secondary">Masqué</span>
+										{% endif %}
+									</td>
+									<td>
+										{% if item.image %}
+											<img src="{{ item.image }}" alt="{{ item.name }}" style="max-width: 50px; max-height: 50px; object-fit: cover;" class="img-thumbnail">
+										{% else %}
+											<span class="text-muted">-</span>
+										{% endif %}
+									</td>
+									<td>
+										<small>{{ item.details[:50] | safe }}{% if item.details|length > 50 %}...{% endif %}</small>
+									</td>
+									<td>
+										<a href="{{ url_for('admin.edit', type='item', item_id=item.id) }}" class="btn btn-sm btn-outline-primary" title="Modifier">
+											&#9998;
+										</a>
+										<a href="{{ url_for('admin.delete', item_id=item.id) }}" class="btn btn-sm btn-outline-danger" title="Supprimer" onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce produit ?');">
+											&#10060;
+										</a>
+									</td>
+								</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
 	{% endif %}
 {% endblock %}
