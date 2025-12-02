@@ -150,4 +150,28 @@ form .btn {
 	.navbar {
 		padding: .3rem 1rem;
 	}
+	
+	.items {
+		gap: 20px;
+		padding: 0 15px;
+		justify-content: center;
+	}
+	
+	.item {
+		width: 100%;
+		max-width: 280px;
+		min-width: 280px;
+		box-sizing: border-box;
+	}
+	
+	.item-wrapper {
+		width: 100%;
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+	}
+	
+	.item-wrapper > * {
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+	}
 }
