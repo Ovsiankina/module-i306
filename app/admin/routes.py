@@ -133,18 +133,24 @@ def dashboard():
 	all_orders = Order.query.all()
 	orders_query = Order.query.order_by(Order.date.desc()).limit(10).all()
 	
-	# Calculate total for each order
+	# Calculate total for each order using historical prices
 	orders = []
 	for order in orders_query:
-		order_total = sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		order_total = sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
 		orders.append({
 			"order": order,
 			"total": order_total
 		})
 	
-	# Calculate statistics
+	# Calculate statistics using historical prices
 	total_revenue = sum(
-		sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
 		for order in all_orders if order.status.lower() != "cancelled"
 	)
 	total_orders = len(all_orders)
@@ -161,10 +167,13 @@ def dashboard():
 	seven_days_ago = datetime.utcnow() - timedelta(days=7)
 	recent_orders_count = Order.query.filter(Order.date >= seven_days_ago).count()
 	
-	# Recent revenue (last 7 days)
+	# Recent revenue (last 7 days) using historical prices
 	recent_orders = Order.query.filter(Order.date >= seven_days_ago).all()
 	recent_revenue = sum(
-		sum(ordered_item.item.price * ordered_item.quantity for ordered_item in order.items)
+		sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
 		for order in recent_orders if order.status.lower() != "cancelled"
 	)
 	
