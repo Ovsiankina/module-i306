@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}
+	Spy de web - Agence Web
+{% endblock %}
+
+{% block content %}
+<div class="container">
+	<div class="row">
+		<div class="col-md-10 offset-md-1">
+			<div class="text-center mb-5">
+				<h1 class="display-4">Spy de web</h1>
+				<p class="lead">Agence Web spécialisée en développement sur mesure</p>
+			</div>
+
+			<hr class="my-5">
+
+			<div class="row mb-5">
+				<div class="col-md-6">
+					<h2>Qui sommes-nous ?</h2>
+					<p>
+						Spy de web est une agence web dynamique spécialisée dans le développement de solutions 
+						numériques sur mesure. Nous accompagnons les entreprises dans leur transformation digitale 
+						avec des solutions innovantes et performantes.
+					</p>
+					<p>
+						Notre équipe de développeurs expérimentés maîtrise les dernières technologies web 
+						pour créer des sites internet, applications web et plateformes e-commerce adaptées 
+						à vos besoins.
+					</p>
+				</div>
+				<div class="col-md-6">
+					<h2>Nos services</h2>
+					<ul>
+						<li><strong>Développement web</strong> - Sites vitrines</li>
+						<li><strong>E-commerce</strong> - Plateformes de vente en ligne</li>
+						<li><strong>Applications web</strong> - Solutions sur mesure</li>
+						<li><strong>Maintenance</strong> - Support et évolution continue</li>
+						<li><strong>Conseil</strong> - Accompagnement stratégique</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="row mb-5">
+				<div class="col-md-12">
+					<h2>Technologies maîtrisées</h2>
+					<div class="d-flex flex-wrap gap-3">
+						<span class="badge badge-primary p-2">Python / Flask</span>
+						<span class="badge badge-primary p-2">JavaScript</span>
+						<span class="badge badge-primary p-2">HTML5 / CSS3</span>
+						<span class="badge badge-primary p-2">Bootstrap</span>
+						<span class="badge badge-primary p-2">SQL / Databases</span>
+						<span class="badge badge-primary p-2">API REST</span>
+						<span class="badge badge-primary p-2">Stripe</span>
+						<span class="badge badge-primary p-2">Git</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="row mb-5">
+				<div class="col-md-12">
+					<h2>Nos réalisations</h2>
+					<div class="card mb-3">
+						<div class="card-body">
+							<h5 class="card-title">Fnuc Marty SA</h5>
+							<p class="card-text">
+								Plateforme e-commerce complète avec gestion de panier, paiements en ligne, 
+								interface administrateur et système de commandes. Développée avec Flask, 
+								intégration Stripe, responsive design et conforme RGPD/LPD.
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="row mb-5">
+				<div class="col-md-12">
+					<h2>Contact</h2>
+					<p>
+						Pour discuter de votre projet ou obtenir un devis, n'hésitez pas à nous contacter :
+					</p>
+					<ul>
+						<li><strong>Email :</strong> contact@spydeweb.com</li>
+						<li><strong>Téléphone :</strong> +41 XX XXX XX XX</li>
+						<li><strong>Adresse :</strong> Suisse</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="text-center mb-5">
+				<a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">Retour au site</a>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+.badge {
+	font-size: 0.9rem;
+	margin: 5px;
+}
+.badge-primary {
+	background-color: #007bff;
+	color: white;
+	padding: 8px 12px;
+	border-radius: 4px;
+}
+.card {
+	border: 1px solid #dee2e6;
+	border-radius: 5px;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.card-body {
+	padding: 20px;
+}
+.gap-3 {
+	gap: 10px;
+}
+</style>
+{% endblock %}
+

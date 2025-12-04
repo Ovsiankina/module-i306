@@ -1,5 +1,5 @@
 .main {
-	padding: 10vh 0;
+	padding: 2vh 0;
 }
 
 table {
@@ -35,4 +35,34 @@ padding:5px 30px;
 .add-new {
 	margin-left:65vw;
 	margin-bottom:20px;
+}
+
+/* Dashboard Styles */
+.card {
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	border: none;
+	margin-bottom: 1.5rem;
+}
+
+.card-header {
+	background-color: #f8f9fa;
+	border-bottom: 1px solid #dee2e6;
+	font-weight: 600;
+}
+
+.card-body {
+	padding: 1.25rem;
+}
+
+.table-responsive {
+	border-radius: 0.25rem;
+}
+
+.badge {
+	font-size: 0.875rem;
+	padding: 0.35em 0.65em;
+}
+
+.alert {
+	border-radius: 0.5rem;
 }

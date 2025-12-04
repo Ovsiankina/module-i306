@@ -72,6 +72,7 @@ class Ordered_item(db.Model):
 	oid = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
 	itemid = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
 	quantity = db.Column(db.Integer, db.ForeignKey('cart.quantity'), nullable=False)
+	price_at_purchase = db.Column(db.Float, nullable=True)  # Price at time of purchase for historical accuracy
 
 
 class Inventory(db.Model):

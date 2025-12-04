@@ -147,6 +147,25 @@ def _seed_default_inventory():
 		)
 
 
+def _seed_default_admin():
+	"""Create a default admin user if no admin exists. Returns True if admin was created."""
+	# Check if any admin user already exists
+	if User.query.filter_by(admin=True).first():
+		return False
+	
+	# Create default admin user
+	admin_user = User(
+		name="Admin",
+		email="admin@example.com",
+		password=generate_password_hash("admin", method="pbkdf2:sha256", salt_length=8),
+		phone="0000000000",
+		admin=True,
+		email_confirmed=True,
+	)
+	db.session.add(admin_user)
+	return True
+
+
 def _auto_migrate_dev_database():
 	if not _debug_seeding_enabled():
 		return
@@ -166,6 +185,11 @@ def _auto_migrate_dev_database():
 
 	if Item.query.count() == 0:
 		_seed_default_inventory()
+		added = True
+
+	# Create default admin user if none exists
+	admin_created = _seed_default_admin()
+	if admin_created:
 		added = True
 
 	if added:
@@ -408,6 +432,18 @@ def remove(id, quantity):
 def item(id):
     item = Item.query.get(id)
     return render_template("item.html", item=item)
+
+
+@app.route("/cgu")
+def cgu():
+    """Page des conditions générales d'utilisation"""
+    return render_template("cgu.html")
+
+
+@app.route("/spydeweb")
+def spydeweb():
+    """Page de présentation de Spy de web"""
+    return render_template("spydeweb.html")
 
 
 @app.route("/search")

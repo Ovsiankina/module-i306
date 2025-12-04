@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}
+	Conditions générales d'utilisation - Fnuc Marty SA
+{% endblock %}
+
+{% block content %}
+<div class="container">
+	<div class="row">
+		<div class="col-md-10 offset-md-1">
+			<h1>Conditions générales d'utilisation (CGU)</h1>
+			<p class="text-muted">Dernière mise à jour : {{ now.strftime('%d.%m.%Y') }}</p>
+			
+			<hr>
+
+			<h2>1. Informations légales</h2>
+			<p>
+				<strong>Fnuc Marty SA</strong><br>
+				Société anonyme de droit suisse<br>
+				<!-- Adresse à compléter -->
+				Suisse
+			</p>
+
+			<h2>2. Objet</h2>
+			<p>
+				Les présentes conditions générales d'utilisation (ci-après "CGU") régissent l'utilisation du site web 
+				et de la plateforme de commerce électronique exploités par Fnuc Marty SA (ci-après "le Site").
+			</p>
+			<p>
+				L'utilisation du Site implique l'acceptation pleine et entière des présentes CGU. Si vous n'acceptez pas 
+				ces conditions, veuillez ne pas utiliser le Site.
+			</p>
+
+			<h2>3. Acceptation des CGU</h2>
+			<p>
+				En accédant et en utilisant le Site, vous reconnaissez avoir lu, compris et accepté les présentes CGU. 
+				Fnuc Marty SA se réserve le droit de modifier ces CGU à tout moment. Les modifications entrent en vigueur 
+				dès leur publication sur le Site.
+			</p>
+
+			<h2>4. Services proposés</h2>
+			<p>
+				Le Site propose la vente en ligne de produits divers. Fnuc Marty SA s'efforce de fournir des informations 
+				exactes sur les produits, mais ne peut garantir l'exactitude complète de toutes les informations affichées.
+			</p>
+
+			<h2>5. Compte utilisateur</h2>
+			<h3>5.1 Création de compte</h3>
+			<p>
+				Pour effectuer des achats, vous devez créer un compte en fournissant des informations exactes et complètes. 
+				Vous êtes responsable de la confidentialité de vos identifiants de connexion.
+			</p>
+			<h3>5.2 Responsabilité</h3>
+			<p>
+				Vous êtes responsable de toutes les activités effectuées sous votre compte. En cas d'utilisation non autorisée 
+				de votre compte, vous devez immédiatement en informer Fnuc Marty SA.
+			</p>
+
+			<h2>6. Commandes et paiements</h2>
+			<h3>6.1 Passation de commande</h3>
+			<p>
+				La passation d'une commande implique une offre d'achat de votre part. Fnuc Marty SA se réserve le droit 
+				d'accepter ou de refuser toute commande.
+			</p>
+			<h3>6.2 Prix</h3>
+			<p>
+				Les prix sont indiqués en francs suisses (CHF) et incluent la TVA le cas échéant. Fnuc Marty SA se réserve 
+				le droit de modifier les prix à tout moment, les prix applicables étant ceux affichés au moment de la commande.
+			</p>
+			<h3>6.3 Paiement</h3>
+			<p>
+				Les paiements sont effectués via Stripe. En effectuant un paiement, vous acceptez les conditions d'utilisation 
+				de Stripe. Fnuc Marty SA ne stocke pas vos informations de carte bancaire.
+			</p>
+
+			<h2>7. Protection des données personnelles</h2>
+			<p>
+				Conformément au Règlement Général sur la Protection des Données (RGPD) de l'Union européenne et à la Loi 
+				fédérale sur la protection des données (LPD) suisse, Fnuc Marty SA s'engage à protéger vos données personnelles.
+			</p>
+			<h3>7.1 Données collectées</h3>
+			<p>
+				Nous collectons les données suivantes :
+			</p>
+			<ul>
+				<li>Nom et prénom</li>
+				<li>Adresse email</li>
+				<li>Numéro de téléphone</li>
+				<li>Adresse de livraison</li>
+				<li>Données de commande et de paiement (via Stripe)</li>
+			</ul>
+			<h3>7.2 Finalité du traitement</h3>
+			<p>
+				Vos données sont traitées pour :
+			</p>
+			<ul>
+				<li>La gestion de votre compte</li>
+				<li>Le traitement et la livraison de vos commandes</li>
+				<li>La communication relative à vos commandes</li>
+				<li>L'amélioration de nos services</li>
+				<li>Le respect de nos obligations légales</li>
+			</ul>
+			<h3>7.3 Base légale</h3>
+			<p>
+				Le traitement de vos données est basé sur :
+			</p>
+			<ul>
+				<li>Votre consentement (art. 6 al. 1 let. a RGPD / art. 6 al. 1 LPD)</li>
+				<li>L'exécution d'un contrat (art. 6 al. 1 let. b RGPD / art. 6 al. 2 let. a LPD)</li>
+				<li>Le respect d'obligations légales (art. 6 al. 1 let. c RGPD / art. 6 al. 1 LPD)</li>
+			</ul>
+			<h3>7.4 Conservation des données</h3>
+			<p>
+				Vos données sont conservées aussi longtemps que nécessaire pour les finalités décrites ci-dessus, 
+				ou conformément aux obligations légales de conservation.
+			</p>
+			<h3>7.5 Vos droits</h3>
+			<p>
+				Conformément au RGPD et à la LPD, vous disposez des droits suivants :
+			</p>
+			<ul>
+				<li><strong>Droit d'accès</strong> : Vous pouvez demander l'accès à vos données personnelles</li>
+				<li><strong>Droit de rectification</strong> : Vous pouvez demander la correction de données inexactes</li>
+				<li><strong>Droit à l'effacement</strong> : Vous pouvez demander la suppression de vos données</li>
+				<li><strong>Droit à la limitation</strong> : Vous pouvez demander la limitation du traitement</li>
+				<li><strong>Droit à la portabilité</strong> : Vous pouvez demander la transmission de vos données</li>
+				<li><strong>Droit d'opposition</strong> : Vous pouvez vous opposer au traitement de vos données</li>
+				<li><strong>Droit de retirer votre consentement</strong> : À tout moment, sans affecter la licéité du traitement antérieur</li>
+			</ul>
+			<p>
+				Pour exercer ces droits, contactez-nous à l'adresse indiquée dans les informations légales.
+			</p>
+			<h3>7.6 Transfert de données</h3>
+			<p>
+				Vos données peuvent être transférées à des prestataires de services (notamment Stripe pour le traitement 
+				des paiements) qui agissent en qualité de sous-traitants et sont soumis aux mêmes obligations de protection des données.
+			</p>
+			<h3>7.7 Sécurité</h3>
+			<p>
+				Fnuc Marty SA met en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données 
+				contre tout accès non autorisé, perte ou destruction.
+			</p>
+
+			<h2>8. Cookies</h2>
+			<p>
+				Le Site utilise des cookies pour améliorer votre expérience utilisateur et sauvegarder votre panier d'achat. 
+				En utilisant le Site, vous acceptez l'utilisation de cookies conformément à notre politique de cookies.
+			</p>
+
+			<h2>9. Propriété intellectuelle</h2>
+			<p>
+				Tous les contenus du Site (textes, images, logos, etc.) sont la propriété de Fnuc Marty SA ou de ses partenaires 
+				et sont protégés par les lois suisses et internationales sur la propriété intellectuelle.
+			</p>
+
+			<h2>10. Responsabilité</h2>
+			<p>
+				Fnuc Marty SA s'efforce d'assurer la disponibilité et le bon fonctionnement du Site, mais ne peut garantir 
+				une disponibilité ininterrompue. Fnuc Marty SA ne saurait être tenue responsable des dommages indirects résultant 
+				de l'utilisation du Site.
+			</p>
+
+			<h2>11. Droit applicable et juridiction</h2>
+			<p>
+				Les présentes CGU sont régies par le droit suisse. Tout litige relatif aux présentes CGU relève de la compétence 
+				exclusive des tribunaux suisses.
+			</p>
+
+			<h2>12. Contact</h2>
+			<p>
+				Pour toute question concernant les présentes CGU ou la protection de vos données, vous pouvez nous contacter 
+				via le formulaire de contact disponible sur le Site ou par email.
+			</p>
+
+			<h2>13. Dispositions diverses</h2>
+			<p>
+				Si une disposition des présentes CGU est déclarée invalide, les autres dispositions demeurent en vigueur. 
+				Fnuc Marty SA se réserve le droit de modifier ces CGU à tout moment.
+			</p>
+
+			<hr>
+			<p class="text-muted">
+				<small>
+					En cas de contradiction entre la version française et une autre langue des présentes CGU, 
+					la version française prévaut.
+				</small>
+			</p>
+		</div>
+	</div>
+</div>
+{% endblock %}
+

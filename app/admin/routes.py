@@ -14,10 +14,11 @@ from flask import (
 	url_for,
 )
 from flask_login import current_user
+from sqlalchemy import text
 from werkzeug.utils import redirect, secure_filename
 
 from ..admin.forms import AddItemForm, OrderEditForm
-from ..db_models import Inventory, InventoryLog, Item, Order, db
+from ..db_models import Cart, Inventory, InventoryLog, Item, Order, Ordered_item, User, db
 from ..funcs import admin_only
 
 
@@ -126,11 +127,103 @@ def _item_to_dict(item: Item) -> dict[str, Any]:
 @admin.route("/")
 @admin_only
 def dashboard():
-	orders = Order.query.order_by(Order.date.desc()).all()
+	from datetime import datetime, timedelta
+	from sqlalchemy import func
+	
+	# Get all orders
+	all_orders = Order.query.all()
+	orders_query = Order.query.order_by(Order.date.desc()).limit(10).all()
+	
+	# Calculate total for each order using historical prices
+	orders = []
+	for order in orders_query:
+		order_total = sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
+		orders.append({
+			"order": order,
+			"total": order_total
+		})
+	
+	# Calculate statistics using historical prices
+	total_revenue = sum(
+		sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
+		for order in all_orders if order.status.lower() != "cancelled"
+	)
+	total_orders = len(all_orders)
+	total_customers = User.query.count()
+	total_items = Item.query.count()
+	
+	# Orders by status
+	orders_by_status = {}
+	for order in all_orders:
+		status = order.status.lower()
+		orders_by_status[status] = orders_by_status.get(status, 0) + 1
+	
+	# Recent orders (last 7 days)
+	seven_days_ago = datetime.utcnow() - timedelta(days=7)
+	recent_orders_count = Order.query.filter(Order.date >= seven_days_ago).count()
+	
+	# Recent revenue (last 7 days) using historical prices
+	recent_orders = Order.query.filter(Order.date >= seven_days_ago).all()
+	recent_revenue = sum(
+		sum(
+			(ordered_item.price_at_purchase or ordered_item.item.price) * ordered_item.quantity
+			for ordered_item in order.items
+		)
+		for order in recent_orders if order.status.lower() != "cancelled"
+	)
+	
+	# Low stock items
 	low_stock_items = [
-		item for item in Item.query.all() if item.inventory and item.inventory.low_stock_threshold > 0 and item.inventory.stock_quantity <= item.inventory.low_stock_threshold
+		item for item in Item.query.all() 
+		if item.inventory and item.inventory.low_stock_threshold > 0 
+		and item.inventory.stock_quantity <= item.inventory.low_stock_threshold
 	]
-	return render_template("admin/home.html", orders=orders, low_stock_items=low_stock_items)
+	
+	# Top selling items
+	top_items_query = db.session.query(
+		Ordered_item.itemid,
+		func.sum(Ordered_item.quantity).label('total_quantity')
+	).group_by(Ordered_item.itemid).order_by(func.sum(Ordered_item.quantity).desc()).limit(5).all()
+	
+	top_items = []
+	for item_id, quantity in top_items_query:
+		item = Item.query.get(item_id)
+		if item:
+			top_items.append({"item": item, "quantity": quantity})
+	
+	# Orders per day (last 7 days)
+	orders_per_day = []
+	for i in range(6, -1, -1):
+		day = datetime.utcnow() - timedelta(days=i)
+		day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+		day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+		count = Order.query.filter(Order.date >= day_start, Order.date <= day_end).count()
+		orders_per_day.append({
+			"date": day.strftime("%Y-%m-%d"),
+			"day": day.strftime("%a"),
+			"count": count
+		})
+	
+	return render_template(
+		"admin/home.html",
+		orders=orders,
+		low_stock_items=low_stock_items,
+		total_revenue=total_revenue,
+		total_orders=total_orders,
+		total_customers=total_customers,
+		total_items=total_items,
+		orders_by_status=orders_by_status,
+		recent_orders_count=recent_orders_count,
+		recent_revenue=recent_revenue,
+		top_items=top_items,
+		orders_per_day=orders_per_day,
+	)
 
 
 @admin.route("/items")
@@ -285,18 +378,50 @@ def edit(type: str, item_id: int):
 @admin.route("/delete/<int:item_id>", methods=["POST", "GET"])
 @admin_only
 def delete(item_id: int):
-	item = Item.query.get_or_404(item_id)
+	# Récupérer seulement le nom sans charger les relations
+	result = db.session.execute(text("SELECT name FROM items WHERE id = :item_id"), {"item_id": item_id})
+	row = result.first()
+	if not row:
+		flash("Article introuvable", "error")
+		return redirect(url_for("admin.items"))
+	
+	item_name = row[0]
+	
+	# Supprimer les entrées du panier associées à cet article
+	Cart.query.filter_by(itemid=item_id).delete()
+	
+	# Vérifier s'il y a des commandes associées (en utilisant une requête SQL brute pour éviter les erreurs de colonnes manquantes)
+	result = db.session.execute(text("SELECT 1 FROM ordered_items WHERE itemid = :item_id LIMIT 1"), {"item_id": item_id})
+	has_orders = result.first() is not None
+	if has_orders:
+		flash(f"Impossible de supprimer {item_name} car il est associé à des commandes existantes.", "error")
+		return redirect(url_for("admin.items"))
+	
+	# Créer un objet Item minimal pour le log (sans le charger depuis la DB)
+	class MinimalItem:
+		def __init__(self, item_id):
+			self.id = item_id
+	
+	minimal_item = MinimalItem(item_id)
+	
 	_log_inventory_change(
-		item,
+		minimal_item,
 		"delete",
 		"item",
-		old_value=item.name,
+		old_value=item_name,
 		new_value=None,
 		note="Item deleted via admin.",
 	)
-	db.session.delete(item)
-	db.session.commit()
-	flash(f"{item.name} deleted successfully", "error")
+	
+	try:
+		# Utiliser une requête SQL brute pour la suppression afin d'éviter complètement le chargement des relations
+		db.session.execute(text("DELETE FROM items WHERE id = :item_id"), {"item_id": item_id})
+		db.session.commit()
+		flash(f"{item_name} deleted successfully", "success")
+	except Exception as e:
+		db.session.rollback()
+		flash(f"Erreur lors de la suppression de {item_name}: {str(e)}", "error")
+	
 	return redirect(url_for("admin.items"))
 
 
@@ -373,20 +498,50 @@ def api_items():
 @admin.route("/api/items/<int:item_id>", methods=["PATCH", "DELETE"])
 @admin_only
 def api_item_detail(item_id: int):
-	item = Item.query.get_or_404(item_id)
-
 	if request.method == "DELETE":
+		# Récupérer seulement le nom sans charger les relations
+		result = db.session.execute(text("SELECT name FROM items WHERE id = :item_id"), {"item_id": item_id})
+		row = result.first()
+		if not row:
+			return jsonify({"error": "Item not found"}), 404
+		
+		item_name = row[0]
+		
+		# Supprimer les entrées du panier associées à cet article
+		Cart.query.filter_by(itemid=item_id).delete()
+		
+		# Vérifier s'il y a des commandes associées (en utilisant une requête SQL brute pour éviter les erreurs de colonnes manquantes)
+		result = db.session.execute(text("SELECT 1 FROM ordered_items WHERE itemid = :item_id LIMIT 1"), {"item_id": item_id})
+		has_orders = result.first() is not None
+		if has_orders:
+			return jsonify({"error": "Cannot delete item: it is associated with existing orders"}), 400
+		
+		# Créer un objet Item minimal pour le log (sans le charger depuis la DB)
+		class MinimalItem:
+			def __init__(self, item_id):
+				self.id = item_id
+		
+		minimal_item = MinimalItem(item_id)
+		
 		_log_inventory_change(
-			item,
+			minimal_item,
 			"delete",
 			"item",
-			old_value=item.name,
+			old_value=item_name,
 			new_value=None,
 			note="Item deleted via API.",
 		)
-		db.session.delete(item)
-		db.session.commit()
-		return jsonify({"status": "deleted", "id": item_id})
+		
+		try:
+			# Utiliser une requête SQL brute pour la suppression afin d'éviter complètement le chargement des relations
+			db.session.execute(text("DELETE FROM items WHERE id = :item_id"), {"item_id": item_id})
+			db.session.commit()
+			return jsonify({"status": "deleted", "id": item_id})
+		except Exception as e:
+			db.session.rollback()
+			return jsonify({"error": f"Error deleting item: {str(e)}"}), 500
+	
+	item = Item.query.get_or_404(item_id)
 
 	payload = request.get_json(silent=True) or {}
 	inventory = _ensure_inventory(item)

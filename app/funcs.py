@@ -30,7 +30,7 @@ def send_confirmation_email(user_email) -> None:
 	msg = Message(
 		'Confirm Your Email Address',
 		recipients=[user_email],
-		sender=("Flask-O-shop Email Confirmation", sender_email),
+		sender=("Fnuc Marty SA - Confirmation Email", sender_email),
 		html=html,
 	)
 	mail.send(msg)
@@ -45,7 +45,12 @@ def fulfill_order(session):
 
 	current_user = User.query.get(uid)
 	for cart in current_user.cart:
-		ordered_item = Ordered_item(oid=order.id, itemid=cart.item.id, quantity=cart.quantity)
+		ordered_item = Ordered_item(
+			oid=order.id,
+			itemid=cart.item.id,
+			quantity=cart.quantity,
+			price_at_purchase=cart.item.price  # Store price at purchase time for historical accuracy
+		)
 		db.session.add(ordered_item)
 		db.session.commit()
 		current_user.remove_from_cart(cart.item.id, cart.quantity)
