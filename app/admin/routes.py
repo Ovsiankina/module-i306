@@ -14,10 +14,11 @@ from flask import (
 	url_for,
 )
 from flask_login import current_user
+from sqlalchemy import text
 from werkzeug.utils import redirect, secure_filename
 
 from ..admin.forms import AddItemForm, OrderEditForm
-from ..db_models import Inventory, InventoryLog, Item, Order, Ordered_item, User, db
+from ..db_models import Cart, Inventory, InventoryLog, Item, Order, Ordered_item, User, db
 from ..funcs import admin_only
 
 
@@ -377,18 +378,50 @@ def edit(type: str, item_id: int):
 @admin.route("/delete/<int:item_id>", methods=["POST", "GET"])
 @admin_only
 def delete(item_id: int):
-	item = Item.query.get_or_404(item_id)
+	# Récupérer seulement le nom sans charger les relations
+	result = db.session.execute(text("SELECT name FROM items WHERE id = :item_id"), {"item_id": item_id})
+	row = result.first()
+	if not row:
+		flash("Article introuvable", "error")
+		return redirect(url_for("admin.items"))
+	
+	item_name = row[0]
+	
+	# Supprimer les entrées du panier associées à cet article
+	Cart.query.filter_by(itemid=item_id).delete()
+	
+	# Vérifier s'il y a des commandes associées (en utilisant une requête SQL brute pour éviter les erreurs de colonnes manquantes)
+	result = db.session.execute(text("SELECT 1 FROM ordered_items WHERE itemid = :item_id LIMIT 1"), {"item_id": item_id})
+	has_orders = result.first() is not None
+	if has_orders:
+		flash(f"Impossible de supprimer {item_name} car il est associé à des commandes existantes.", "error")
+		return redirect(url_for("admin.items"))
+	
+	# Créer un objet Item minimal pour le log (sans le charger depuis la DB)
+	class MinimalItem:
+		def __init__(self, item_id):
+			self.id = item_id
+	
+	minimal_item = MinimalItem(item_id)
+	
 	_log_inventory_change(
-		item,
+		minimal_item,
 		"delete",
 		"item",
-		old_value=item.name,
+		old_value=item_name,
 		new_value=None,
 		note="Item deleted via admin.",
 	)
-	db.session.delete(item)
-	db.session.commit()
-	flash(f"{item.name} deleted successfully", "error")
+	
+	try:
+		# Utiliser une requête SQL brute pour la suppression afin d'éviter complètement le chargement des relations
+		db.session.execute(text("DELETE FROM items WHERE id = :item_id"), {"item_id": item_id})
+		db.session.commit()
+		flash(f"{item_name} deleted successfully", "success")
+	except Exception as e:
+		db.session.rollback()
+		flash(f"Erreur lors de la suppression de {item_name}: {str(e)}", "error")
+	
 	return redirect(url_for("admin.items"))
 
 
@@ -465,20 +498,50 @@ def api_items():
 @admin.route("/api/items/<int:item_id>", methods=["PATCH", "DELETE"])
 @admin_only
 def api_item_detail(item_id: int):
-	item = Item.query.get_or_404(item_id)
-
 	if request.method == "DELETE":
+		# Récupérer seulement le nom sans charger les relations
+		result = db.session.execute(text("SELECT name FROM items WHERE id = :item_id"), {"item_id": item_id})
+		row = result.first()
+		if not row:
+			return jsonify({"error": "Item not found"}), 404
+		
+		item_name = row[0]
+		
+		# Supprimer les entrées du panier associées à cet article
+		Cart.query.filter_by(itemid=item_id).delete()
+		
+		# Vérifier s'il y a des commandes associées (en utilisant une requête SQL brute pour éviter les erreurs de colonnes manquantes)
+		result = db.session.execute(text("SELECT 1 FROM ordered_items WHERE itemid = :item_id LIMIT 1"), {"item_id": item_id})
+		has_orders = result.first() is not None
+		if has_orders:
+			return jsonify({"error": "Cannot delete item: it is associated with existing orders"}), 400
+		
+		# Créer un objet Item minimal pour le log (sans le charger depuis la DB)
+		class MinimalItem:
+			def __init__(self, item_id):
+				self.id = item_id
+		
+		minimal_item = MinimalItem(item_id)
+		
 		_log_inventory_change(
-			item,
+			minimal_item,
 			"delete",
 			"item",
-			old_value=item.name,
+			old_value=item_name,
 			new_value=None,
 			note="Item deleted via API.",
 		)
-		db.session.delete(item)
-		db.session.commit()
-		return jsonify({"status": "deleted", "id": item_id})
+		
+		try:
+			# Utiliser une requête SQL brute pour la suppression afin d'éviter complètement le chargement des relations
+			db.session.execute(text("DELETE FROM items WHERE id = :item_id"), {"item_id": item_id})
+			db.session.commit()
+			return jsonify({"status": "deleted", "id": item_id})
+		except Exception as e:
+			db.session.rollback()
+			return jsonify({"error": f"Error deleting item: {str(e)}"}), 500
+	
+	item = Item.query.get_or_404(item_id)
 
 	payload = request.get_json(silent=True) or {}
 	inventory = _ensure_inventory(item)

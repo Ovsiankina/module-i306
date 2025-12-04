@@ -157,18 +157,13 @@ module-i306/
 └── README.md             # This file
 ```
 
-## Documentation
-
-- [Requirements document](./documentation/cahier-des-charges.md)
-- [End-to-end testing](./documentation/E2E-TESTING.md)
-
 ## Live Project
 
-Deployed version available at: <https://flaskoshop.gilobyte.com>
+Deployed version available at: 
 
 ## License
 
-[To be defined]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Authors
 
